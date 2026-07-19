@@ -554,7 +554,17 @@ export default function SettingsPage() {
         description="This permanently removes every saved analysis from this browser. This action cannot be undone."
         itemSummary={
           <p className="text-[13px] text-text-secondary">
-            {historyStore.list().length} analys{historyStore.list().length === 1 ? "is" : "es"} will be removed.
+            {(() => {
+              // Read once instead of twice (was calling historyStore.list()
+              // — a localStorage read + JSON.parse — a second time in the
+              // same expression just to check the count for "is"/"es").
+              const count = historyStore.list().length;
+              return (
+                <>
+                  {count} analys{count === 1 ? "is" : "es"} will be removed.
+                </>
+              );
+            })()}
           </p>
         }
         onConfirm={() => historyStore.clear()}

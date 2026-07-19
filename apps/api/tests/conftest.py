@@ -69,19 +69,38 @@ def _reset_auth_rate_limits():
 
 
 @pytest.fixture(autouse=True)
+def _clear_settings_cache():
+    # get_settings() is @lru_cache'd now (perf pass — a real API process
+    # never needs to re-read/re-parse the root .env file on every single
+    # call, which was the previous behavior). That cache must not survive
+    # across tests, or the monkeypatch.setenv calls below (and in individual
+    # tests) would silently stop taking effect the moment any earlier test
+    # populated the cache first. Cleared before each test runs — every
+    # monkeypatch.setenv in this file happens before the first request that
+    # would actually call get_settings() within a given test, so there is no
+    # ordering hazard between this and the env-setting fixtures below.
+    from app.config import get_settings
+
+    get_settings.cache_clear()
+    yield
+    get_settings.cache_clear()
+
+
+@pytest.fixture(autouse=True)
 def _default_to_mock_mode(monkeypatch):
     # Most tests assume mock mode (fast, deterministic, no network/API key
     # needed) — but Settings reads ANALYSIS_MOCK_MODE from the developer's
-    # real root .env at call time (config.py deliberately doesn't cache it,
-    # and it isn't overridden anywhere else in the test suite). If a
-    # developer flips ANALYSIS_MOCK_MODE=false locally to test the real
-    # provider (exactly what happened once already — see D024), every
-    # "mock mode" test would silently start hitting the real provider
-    # instead, and fail in confusing, unrelated-looking ways. Force it back
-    # to true by default for every test; the handful of tests that
+    # real root .env at call time, and it isn't overridden anywhere else in
+    # the test suite. If a developer flips ANALYSIS_MOCK_MODE=false locally
+    # to test the real provider (exactly what happened once already — see
+    # D024), every "mock mode" test would silently start hitting the real
+    # provider instead, and fail in confusing, unrelated-looking ways. Force
+    # it back to true by default for every test; the handful of tests that
     # specifically exercise the real-provider failure path call
     # monkeypatch.setenv("ANALYSIS_MOCK_MODE", "false") themselves, which
-    # runs after this fixture and correctly overrides it.
+    # runs after this fixture and correctly overrides it (see
+    # _clear_settings_cache above for why that override is still honored
+    # now that get_settings() is cached).
     monkeypatch.setenv("ANALYSIS_MOCK_MODE", "true")
 
 

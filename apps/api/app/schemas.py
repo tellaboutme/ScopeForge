@@ -148,6 +148,19 @@ class ProposalRegenerateRequest(CamelModel):
     freelancer_bio: str | None = Field(default=None, max_length=500)
 
 
+# Word-count floor enforced in main.create_analysis() (Pydantic's
+# min_length=40 above is a *character* floor and lets a low-effort brief
+# like "aaaa...aaaa" through — the word count is what actually keeps a brief
+# useful). Was a bare literal `8` in main.py with no link to
+# apps/web/src/lib/format.ts's MIN_BRIEF_WORDS, which enforces the identical
+# rule client-side for the same reason (fail fast before spending a model
+# call). The two are still two separate numbers in two languages/repos (no
+# shared source across the FastAPI/Next.js boundary), so keep them in sync
+# by hand if this ever changes — but at least each side has exactly one
+# named place to change now, not a second bare copy nearby.
+MIN_BRIEF_WORDS = 8
+
+
 class AnalysisCreate(CamelModel):
     description: str = Field(min_length=40, max_length=30000)
     experience_level: Literal["beginner", "intermediate", "expert"] = "intermediate"
@@ -185,10 +198,17 @@ class AnalysisCreate(CamelModel):
 
 PlanTier = Literal["spark", "forge", "furnace"]
 
+# Single source of truth for the password length floor — previously the
+# literal `8` was duplicated three times (here on both password fields, plus
+# again in auth.check_password_strength()'s length check), with nothing
+# tying them together. auth.py imports this instead of hardcoding its own
+# copy; if the floor ever changes it changes in exactly one place.
+PASSWORD_MIN_LENGTH = 8
+
 
 class RegisterRequest(CamelModel):
     email: str = Field(min_length=3, max_length=255)
-    password: str = Field(min_length=8, max_length=200)
+    password: str = Field(min_length=PASSWORD_MIN_LENGTH, max_length=200)
     display_name: str | None = Field(default=None, max_length=80)
     # D042 — Cloudflare Turnstile response token, required only when
     # TURNSTILE_ENABLED=true server-side (see captcha.py). Optional here so
@@ -223,7 +243,7 @@ class PasswordResetConfirmRequest(CamelModel):
     user as a specific 422 (mirrors RegisterRequest's handling)."""
 
     token: str = Field(min_length=1, max_length=200)
-    password: str = Field(min_length=8, max_length=200)
+    password: str = Field(min_length=PASSWORD_MIN_LENGTH, max_length=200)
 
 
 class SubscriptionPublic(CamelModel):

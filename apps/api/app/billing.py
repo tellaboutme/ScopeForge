@@ -17,15 +17,24 @@ from .schemas import CheckoutSessionPublic, PlanPublic, PlanTier, SubscriptionPu
 # D037 for the naming rationale (Spark/Forge/Furnace — a forge motif
 # matching the "ScopeForge" product name, not a generic Free/Pro/Enterprise
 # ladder).
+# The first feature bullet of spark/forge used to hardcode its own copy of
+# monthly_analyses ("5 analyses per month" next to monthly_analyses=5,
+# "60 analyses per month" next to monthly_analyses=60) — two independent
+# literals that happened to agree, with nothing enforcing that they would
+# keep agreeing if the limit ever changed. Derived from the field itself
+# below instead, so there is exactly one number per tier to edit.
+_SPARK_MONTHLY_ANALYSES = 5
+_FORGE_MONTHLY_ANALYSES = 60
+
 PLAN_CATALOG: dict[PlanTier, PlanPublic] = {
     "spark": PlanPublic(
         tier="spark",
         name="Spark",
         tagline="Try it out, no card required.",
         price_cents=0,
-        monthly_analyses=5,
+        monthly_analyses=_SPARK_MONTHLY_ANALYSES,
         features=[
-            "5 analyses per month",
+            f"{_SPARK_MONTHLY_ANALYSES} analyses per month",
             "Full report: score, pricing, timeline, risks, proposal",
             "Local history, no account required",
         ],
@@ -35,9 +44,9 @@ PLAN_CATALOG: dict[PlanTier, PlanPublic] = {
         name="Forge",
         tagline="For freelancers scoping every week.",
         price_cents=1200,
-        monthly_analyses=60,
+        monthly_analyses=_FORGE_MONTHLY_ANALYSES,
         features=[
-            "60 analyses per month",
+            f"{_FORGE_MONTHLY_ANALYSES} analyses per month",
             "Everything in Spark",
             "Cross-device history (account-backed)",
             "Priority support",

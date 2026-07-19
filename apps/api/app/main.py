@@ -50,6 +50,7 @@ from .schemas import (
     CheckoutRequest,
     CheckoutSessionPublic,
     LoginRequest,
+    MIN_BRIEF_WORDS,
     PlanPublic,
     ProjectAnalysis,
     Proposal,
@@ -85,16 +86,36 @@ if not settings.session_cookie_secure:
         "deployment behind HTTPS, or session tokens are interceptable on the network."
     )
 
+# D060: ANALYSIS_MOCK_MODE defaults to true (config.py) so a fresh local
+# clone works with zero external keys — but that exact same default is what
+# makes it possible to ship a real deployment that silently serves the
+# canned, deterministic mock.py report (whose own verdict text literally
+# says "This is a deterministic mock result") to every real user, with
+# nothing in the UI making that obvious unless someone reads the report
+# text closely. A loud startup-time log line, same pattern as
+# SESSION_COOKIE_SECURE above, makes this impossible to miss in any deploy
+# platform's log viewer the moment the service boots.
+if settings.analysis_mock_mode:
+    logger.warning(
+        "ANALYSIS_MOCK_MODE is true — every analysis and proposal regeneration returns a canned, deterministic "
+        "mock result instead of calling the real AI provider. This is expected for local dev with no AI_API_KEY, "
+        "but must be set to false with a valid AI_API_KEY for any real deployment, or every user sees fake output."
+    )
+
 # Anonymous usage (D004) still works with zero friction — see
 # installation_id_header below — but Phase 9 (D037) added real accounts on
 # top, which need cookies to cross the browser<->API origin boundary, so
 # allow_credentials is now True and the origin allowlist stays explicit
 # (required by the CORS spec once credentials are allowed — "*" is invalid
-# alongside allow_credentials=True).
+# alongside allow_credentials=True). The two localhost origins always work
+# for local dev regardless of config; APP_BASE_URL adds the real deployed
+# frontend's origin on top (D059 — this used to be a separate FRONTEND_URL
+# setting, merged into APP_BASE_URL since both meant the same thing; see
+# config.py's comment on app_base_url).
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000", settings.frontend_url.rstrip("/")],
+    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000", settings.app_base_url.rstrip("/")],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -213,7 +234,16 @@ def _send_verification_email(session: Session, user: User) -> None:
     sites from duplicating the URL-building and commit.
     """
     raw_token = create_verification_token(session, user)
-    verification_url = f"{settings.app_base_url}/verify-email?token={raw_token}"
+    # get_settings() (not the module-level `settings` used for CORS/startup
+    # logging above) — request-handling code should read live config, not a
+    # snapshot frozen at import time. This was briefly using the stale
+    # module-level `settings` (D059 found it while looking at the Render
+    # deploy changes) — harmless in a real single-env deployment where
+    # APP_BASE_URL never changes at runtime, but inconsistent with every
+    # other handler in this file and would silently ignore a test's
+    # monkeypatch.setenv("APP_BASE_URL", ...). Cheap now regardless
+    # (get_settings() is @lru_cache'd, see config.py).
+    verification_url = f"{get_settings().app_base_url}/verify-email?token={raw_token}"
     session.commit()
     send_verification_email(user.email, verification_url)
 
@@ -395,7 +425,9 @@ def forgot_password(
     if user is None or user.email_verified_at is None:
         return
     raw_token = create_password_reset_token(session, user)
-    reset_url = f"{settings.app_base_url}/reset-password?token={raw_token}"
+    # get_settings(), not module-level `settings` — see the matching note in
+    # _send_verification_email above.
+    reset_url = f"{get_settings().app_base_url}/reset-password?token={raw_token}"
     session.commit()
     send_password_reset_email(user.email, reset_url)
 
@@ -614,7 +646,7 @@ def create_analysis(
     _require_verified_email(user)
     usage.enforce_usage_limit(session, user, installation_id, client_ip)
 
-    if len(payload.description.split()) < 8:
+    if len(payload.description.split()) < MIN_BRIEF_WORDS:
         raise HTTPException(
             status_code=422,
             detail={"code": "brief_too_short", "message": "Project brief is too short."},

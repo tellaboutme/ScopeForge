@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 from .config import get_settings
 from .db import get_session
 from .models import EmailVerificationToken, PasswordResetToken, User, UserSession
+from .schemas import PASSWORD_MIN_LENGTH
 
 # Argon2id (argon2-cffi's default Type.ID) — OWASP's current top password
 # hashing recommendation, memory-hard against GPU/ASIC cracking, stronger
@@ -45,8 +46,8 @@ def normalize_email(email: str) -> str:
     return email.strip().lower()
 
 
-# D042 — "medium" password strength: Pydantic's min_length=8 on
-# RegisterRequest already sets the floor; this adds the two checks that
+# D042 — "medium" password strength: Pydantic's min_length=PASSWORD_MIN_LENGTH
+# on RegisterRequest already sets the floor; this adds the two checks that
 # actually matter at that length (a pure-digit or pure-letter 8-char string
 # is trivially weak) plus a short deny-list of the passwords real leaked-
 # credential lists show over and over. Deliberately not a full breach-
@@ -67,9 +68,13 @@ def check_password_strength(password: str) -> str | None:
     validator on RegisterRequest — the reason string needs to reach the
     user as a specific 422 message, and schemas.py stays free of
     business-rule imports (auth.py already owns password handling).
+
+    The length check mirrors schemas.PASSWORD_MIN_LENGTH rather than its own
+    literal `8` — previously this and both password Field(min_length=...)
+    declarations each hardcoded the same number independently.
     """
-    if len(password) < 8:
-        return "Password must be at least 8 characters."
+    if len(password) < PASSWORD_MIN_LENGTH:
+        return f"Password must be at least {PASSWORD_MIN_LENGTH} characters."
     if not any(char.isalpha() for char in password):
         return "Password must include at least one letter."
     if not any(char.isdigit() for char in password):
@@ -112,13 +117,23 @@ def create_session(session: Session, response: Response, user: User, user_agent:
     session.add(record)
     session.flush()
 
+    # Read once — this used to call get_settings() twice in the same
+    # expression (once for `secure`, once for `samesite`), building/reading
+    # Settings redundantly for no reason.
+    cookie_secure = get_settings().session_cookie_secure
     response.set_cookie(
         key=SESSION_COOKIE_NAME,
         value=raw_token,
         httponly=True,
-        secure=get_settings().session_cookie_secure,
-        samesite="none" 
-        if get_settings().session_cookie_secure else "lax",
+        secure=cookie_secure,
+        # SameSite=None is required for a cross-site cookie (e.g. the API on
+        # a different origin/domain than the frontend in a real deployment)
+        # to be sent at all — but SameSite=None is only valid on a Secure
+        # cookie per the spec, real browsers silently drop a
+        # SameSite=None; Secure=false cookie. Falls back to Lax whenever
+        # cookie_secure is off (local http:// dev), matching the existing
+        # Secure-attribute reasoning above.
+        samesite="none" if cookie_secure else "lax",
         max_age=_SESSION_TTL_DAYS * 24 * 3600,
         path="/",
     )

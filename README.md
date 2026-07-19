@@ -210,7 +210,7 @@ Copy `.env.example` to `.env` and fill in what you need. Every value has a worki
 | `NEXT_PUBLIC_TURNSTILE_SITE_KEY` | No | Turnstile site key (client side) | *(blank)* |
 | `RESEND_API_KEY` | No | Resend key for verification email; blank skips sending | *(blank)* |
 | `EMAIL_FROM_ADDRESS` | No | From address for verification email | `ScopeForge <onboarding@resend.dev>` |
-| `APP_BASE_URL` | No | Base URL used to build verification links | `http://localhost:3000` |
+| `APP_BASE_URL` | No | Deployed frontend's URL — used to build verification/reset email links *and* as the extra allowed CORS origin | `http://localhost:3000` |
 
 ## Available scripts
 
@@ -246,7 +246,7 @@ The backend test suite runs against in-memory SQLite and does not require Postgr
 ## Deployment
 
 - **Database:** any managed PostgreSQL; set `DATABASE_URL` and run `alembic upgrade head`.
-- **API:** run `uvicorn app.main:app` behind a process manager and reverse proxy. Set `ANALYSIS_MOCK_MODE=false` with a real key to enable live analysis, and `SESSION_COOKIE_SECURE=true` behind HTTPS.
+- **API:** run `uvicorn app.main:app` behind a process manager and reverse proxy. Set `ANALYSIS_MOCK_MODE=false` with a real key to enable live analysis, `SESSION_COOKIE_SECURE=true` behind HTTPS, and `APP_BASE_URL` to the deployed frontend's actual URL (e.g. `https://scopeforge.onrender.com`) — the API rejects browser requests from any origin not in its CORS allowlist, and this is what adds the real frontend to it (on top of the two localhost origins that always work for local dev), so this needs to be set correctly for the deployed frontend to be able to call the API at all.
 - **Web:** `next build` then `next start`, or deploy to any Next.js-compatible host. Point `NEXT_PUBLIC_API_URL` at the deployed API.
 
 This repository is not tied to a specific host; the pieces are standard and deploy anywhere that runs Node.js, Python, and PostgreSQL.

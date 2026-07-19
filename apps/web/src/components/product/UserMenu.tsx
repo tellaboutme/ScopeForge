@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import { CreditCard, Download, LogIn, LogOut, MoreHorizontal, Settings, Trash2 } from "lucide-react";
 import {
@@ -35,7 +35,14 @@ export function UserMenu({ compact = false }: { compact?: boolean }) {
   // assuming an account always exists. useMountedAfterPaint avoids a
   // hydration mismatch (localStorage is only readable client-side).
   const mounted = useMountedAfterPaint();
-  const localName = mounted ? settingsStore.load().freelancerName.trim() : "";
+  // UserMenu lives in the app shell (sidebar/mobile nav), so it re-renders
+  // on effectively every auth/usage change across the whole app. This used
+  // to call settingsStore.load() (a localStorage read + JSON.parse) directly
+  // in the render body, redoing that work on every single one of those
+  // re-renders just to read one already-unchanging string. useMemo keyed on
+  // `mounted` re-runs it exactly once — when `mounted` flips from false to
+  // true after the initial client paint — not on every render after that.
+  const localName = useMemo(() => (mounted ? settingsStore.load().freelancerName.trim() : ""), [mounted]);
 
   const signedIn = status === "ready" && user !== null;
   const displayName = signedIn ? user.displayName || user.email : localName || "Your profile";

@@ -52,9 +52,15 @@ export default function AnalyzePage() {
   const [brief, setBrief] = useState("");
   // Preselected from the user's saved /settings defaults (falls back to the
   // built-in defaults when nothing has been saved yet). See settings-store.ts.
-  const [experience, setExperience] = useState<ExperienceLevel>(() => settingsStore.load().experience);
-  const [currency, setCurrency] = useState<AnalysisCurrency>(() => settingsStore.load().currency);
-  const [depth, setDepth] = useState<AnalysisDepth>(() => settingsStore.load().depth);
+  // Loaded once via a single lazy initializer — this used to call
+  // settingsStore.load() three separate times (once per field), each doing
+  // its own localStorage.getItem + JSON.parse + object spread over the same
+  // underlying blob for no reason; reading it once and destructuring is the
+  // same result for a third of the work, on every first mount of this page.
+  const [initialSettings] = useState(() => settingsStore.load());
+  const [experience, setExperience] = useState<ExperienceLevel>(initialSettings.experience);
+  const [currency, setCurrency] = useState<AnalysisCurrency>(initialSettings.currency);
+  const [depth, setDepth] = useState<AnalysisDepth>(initialSettings.depth);
   // Structured client-stated facts (D029) — plain strings for controlled
   // inputs, parsed on submit. Both optional; an unparsable/empty value is
   // simply omitted from the request rather than blocking submission.

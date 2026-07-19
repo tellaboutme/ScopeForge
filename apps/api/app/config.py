@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from functools import lru_cache
 from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -11,7 +12,6 @@ _ROOT_ENV_FILE = Path(__file__).resolve().parents[3] / ".env"
 
 
 class Settings(BaseSettings):
-    frontend_url: str = "http://localhost:3000"
     model_config = SettingsConfigDict(env_file=str(_ROOT_ENV_FILE), env_file_encoding="utf-8", extra="ignore")
 
     ai_provider: str = "groq"
@@ -63,10 +63,40 @@ class Settings(BaseSettings):
     # once a real sending domain (e.g. "ScopeForge <noreply@yourdomain.com>")
     # is verified there.
     email_from_address: str = "ScopeForge <onboarding@resend.dev>"
+    # The one setting for "where the deployed frontend actually lives" — used
+    # to build the links in verification/reset emails (main.py's
+    # _send_verification_email/forgot_password) *and* as the extra allowed
+    # CORS origin alongside the two hardcoded localhost ones (main.py's
+    # CORSMiddleware setup). This used to be two separate settings
+    # (`app_base_url` here, plus a `frontend_url` added later specifically
+    # for CORS while wiring up a real deployment) that both meant the same
+    # thing and both defaulted to the same localhost value — real, findable
+    # duplication: a deployment had to set two env vars to the same URL to
+    # fully work, and setting only one silently half-broke the app (emails
+    # linking to the wrong host, or the real frontend's origin getting
+    # rejected by CORS) rather than failing loudly. Merged back into this
+    # single field for any deployment beyond localhost — set APP_BASE_URL
+    # once and both email links and CORS pick it up.
     app_base_url: str = "http://localhost:3000"
 
 
+@lru_cache(maxsize=1)
 def get_settings() -> Settings:
-    # Deliberately not cached: this is a low-traffic local API, and tests
-    # rely on re-reading env vars (via monkeypatch.setenv) on every call.
+    # Cached (previously deliberately NOT cached — see the note below on why
+    # that was actually a real cost, not a neutral choice). `Settings()`
+    # re-reads and re-parses the root .env file from disk plus every
+    # relevant env var on *every* construction — get_settings() is called
+    # at least once per request (often several times: main.py's handlers,
+    # auth.py's create_session/token helpers, captcha.py, email.py all call
+    # it fresh), including on `GET /v1/usage`, which the frontend sidebar
+    # polls on every page load. None of that ever changes while the process
+    # is running in a real deployment, so re-doing it per call was pure
+    # waste, not a safety net for anything. maxsize=1 is enough since this
+    # takes no arguments — there is only ever one cache entry.
+    #
+    # Tests still need per-test env overrides (monkeypatch.setenv) to take
+    # effect, which a naive cache would silently defeat — solved with an
+    # autouse `_clear_settings_cache` fixture in conftest.py that calls
+    # `get_settings.cache_clear()` before every test, not by leaving
+    # production requests to pay a real, avoidable cost on every call.
     return Settings()
