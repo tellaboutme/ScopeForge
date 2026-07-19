@@ -1,0 +1,328 @@
+@import "tailwindcss";
+
+@theme {
+  /* Color tokens — the UI guidelines */
+  --color-background: #070812;
+  --color-background-elevated: #0b0d18;
+  --color-surface-1: #0e1020;
+  --color-surface-2: #121528;
+  --color-surface-hover: #171a31;
+
+  --color-text-primary: #f4f2ff;
+  --color-text-secondary: #a6a3bd;
+  /* Phase 8 accessibility pass: the original #77758f measured ~4.06:1 against
+     --color-surface-2 (its most common background — input placeholders,
+     meta text), below WCAG AA's 4.5:1 for normal-size text. #8a88a3 clears
+     ≥5:1 against background/surface-1/surface-2 while staying visibly the
+     dimmest step in the primary > secondary > tertiary hierarchy. */
+  --color-text-tertiary: #8a88a3;
+
+  --color-border-subtle: rgba(255, 255, 255, 0.07);
+  --color-border-default: rgba(255, 255, 255, 0.11);
+
+  --color-accent: #7c5cff;
+  --color-accent-hover: #8d72ff;
+  --color-accent-muted: rgba(124, 92, 255, 0.14);
+  /* Dedicated selection-highlight opacity — --color-accent-muted (14%) reads
+     as barely-there when actually highlighting selected text; this is the
+     same accent hue at a strength tuned specifically for that purpose. */
+  --color-accent-selection: rgba(124, 92, 255, 0.42);
+
+  --color-success: #35d69f;
+  --color-success-muted: rgba(53, 214, 159, 0.14);
+  --color-warning: #f1b955;
+  --color-warning-muted: rgba(241, 185, 85, 0.14);
+  --color-danger: #f36b78;
+  --color-danger-muted: rgba(243, 107, 120, 0.14);
+  --color-info: #63a7ff;
+  --color-info-muted: rgba(99, 167, 255, 0.14);
+
+  /* Radius tokens */
+  --radius-control: 8px;
+  --radius-btn: 10px;
+  --radius-input: 12px;
+  --radius-card: 16px;
+  --radius-modal: 20px;
+
+  /* Fonts */
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  /* Numeric/technical family (scores, prices, durations) — see the design notes D-latest. */
+  --font-mono: var(--font-roboto-mono), var(--font-geist-mono), ui-monospace, "JetBrains Mono", "SFMono-Regular", monospace;
+  /* Logo/wordmark only — never used for UI copy. */
+  --font-logo: var(--font-cinzel), var(--font-sans);
+  /* Reserved for the verdict decision headline only — the one element allowed to dominate. */
+  --font-display: var(--font-bebas-neue), var(--font-sans);
+
+  /* Motion */
+  --ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
+  /* Exit/close curve (motion-polish milestone) — accelerates out, so
+     departing overlays/rows get out of the way quickly rather than easing
+     out at the same gentle rate they eased in. Mirrors lib/motion.ts's
+     EASE.exit for the CSS side of the app (Radix overlays, row reveals). */
+  --ease-exit: cubic-bezier(0.4, 0, 1, 1);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  background: var(--color-background);
+  color-scheme: dark;
+}
+
+body {
+  margin: 0;
+  min-height: 100dvh;
+  color: var(--color-text-primary);
+  font-family: var(--font-sans);
+  background:
+    radial-gradient(circle at 46% -6%, rgba(124, 92, 255, 0.09), transparent 38%),
+    var(--color-background);
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: not-allowed;
+}
+
+::selection {
+  background: var(--color-accent-selection);
+  color: var(--color-text-primary);
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* Reduced motion — the UI guidelines interaction rules */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Prevent background scroll while a drawer/dialog is open */
+body[data-scroll-lock="true"] {
+  overflow: hidden;
+}
+
+/* Radix overlay/popover/dialog animation (motion-polish milestone).
+   Every one of these classes now animates BOTH directions off the same
+   Radix `data-state="open"|"closed"` attribute: the base rule (no attribute
+   selector) plays the entrance and is what a non-Radix consumer (the
+   billing checkout success overlay, which has no data-state) gets by
+   default; the `[data-state="closed"]` rule overrides it with a faster,
+   ease-in exit while Radix's Presence holds the element mounted just long
+   enough for that exit animation to finish. `both` fill-mode is required on
+   every one of these because the dialog/drawer keyframes below bake their
+   full final transform (including centering/positioning offsets) into the
+   "to"/"from" frames rather than relying on a separate non-animated base
+   transform to take over afterward — see .animate-dialog-pop. */
+
+@keyframes overlay-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes overlay-fade-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+.animate-overlay-fade {
+  animation: overlay-fade-in 150ms var(--ease-standard) both;
+}
+
+.animate-overlay-fade[data-state="closed"] {
+  animation: overlay-fade-out 150ms var(--ease-exit) both;
+}
+
+/* Dropdown / Popover / Select / Tooltip content. `--radix-popper-transform-origin`
+   is set by Radix's Popper positioning to the actual side the content opened
+   on, so the scale settles from the edge nearest its trigger instead of a
+   fixed corner. */
+@keyframes menu-pop-in {
+  from { opacity: 0; transform: translateY(-4px) scale(0.985); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes menu-pop-out {
+  from { opacity: 1; transform: translateY(0) scale(1); }
+  to { opacity: 0; transform: translateY(-3px) scale(0.985); }
+}
+
+.animate-menu-pop {
+  transform-origin: var(--radix-popper-transform-origin, center);
+  animation: menu-pop-in 150ms var(--ease-standard) both;
+}
+
+.animate-menu-pop[data-state="closed"] {
+  animation: menu-pop-out 110ms var(--ease-exit) both;
+}
+
+/* Centered Dialog content. Unlike the other overlay classes, this element's
+   *base* (non-animated) position is centering transform `translate(-50%,
+   -50%)` applied via Tailwind's -translate-x-1/2 -translate-y-1/2
+   utilities — but a CSS `animation` fully replaces the `transform` property
+   for its duration, silently overriding those utility classes and
+   uncentering the dialog for the entire 150-200ms it's animating (this was
+   the original "dialog jump" bug). The fix is to bake the -50%/-50%
+   centering into every keyframe frame directly and drop the Tailwind
+   translate utilities from Dialog.tsx entirely, so the animation is the
+   only thing ever setting `transform` on this element — `both` fill-mode
+   then keeps the final "to" frame's centered transform applied permanently
+   once the animation finishes, rather than reverting to an unset transform. */
+@keyframes dialog-pop-in {
+  from { opacity: 0; transform: translate(-50%, calc(-50% + 6px)) scale(0.985); }
+  to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+}
+
+@keyframes dialog-pop-out {
+  from { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  to { opacity: 0; transform: translate(-50%, calc(-50% + 6px)) scale(0.985); }
+}
+
+.animate-dialog-pop {
+  animation: dialog-pop-in 200ms var(--ease-standard) both;
+}
+
+.animate-dialog-pop[data-state="closed"] {
+  animation: dialog-pop-out 150ms var(--ease-exit) both;
+}
+
+/* Mobile navigation drawer — previously reused .animate-dialog-pop (a
+   centered fade+scale), which is wrong for a panel that's pinned to the
+   left edge: it does not need to be recentered, has no `-50%` offset, and
+   reads better as a pure slide with no scale at all. Dedicated keyframes,
+   asymmetric in/out timing (the user should notice the drawer arriving,
+   but the exit shouldn't feel like it's lagging behind their tap). */
+@keyframes drawer-slide-in {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(0); }
+}
+
+@keyframes drawer-slide-out {
+  from { transform: translateX(0); }
+  to { transform: translateX(-100%); }
+}
+
+.animate-drawer-slide {
+  animation: drawer-slide-in 210ms var(--ease-standard) both;
+}
+
+.animate-drawer-slide[data-state="closed"] {
+  animation: drawer-slide-out 170ms var(--ease-exit) both;
+}
+
+/* Verdict ambient light — the one place the UI guidelines explicitly allows
+   a glow. Previously pulsed forever (5s infinite); now settles in once and
+   holds still, so it reads as ambient lighting rather than a heartbeat. */
+@keyframes verdict-settle-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.animate-verdict-settle {
+  animation: verdict-settle-in 600ms var(--ease-standard) both;
+}
+
+/* Mock-checkout success confirmation (D039) — a brief animated popup
+   ("Subscription activated") after a successful payment confirm, distinct
+   from dialog-pop-in (form-triggered, no auto-dismiss) since this one is a
+   self-dismissing, celebratory confirmation the user didn't summon. */
+@keyframes success-pop-in {
+  0% {
+    opacity: 0;
+    transform: translateY(8px) scale(0.92);
+  }
+  60% {
+    opacity: 1;
+    transform: translateY(0) scale(1.03);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.animate-success-pop {
+  animation: success-pop-in 420ms var(--ease-standard) both;
+}
+
+/* Staggered entrance for report rows/cards. Retuned (motion-polish
+   milestone): 8px -> 6px travel, 420ms -> 320-360ms duration — see the
+   per-row animationDelay values (0/55/110/165ms) at each usage site in
+   analysis/[id]/page.tsx. */
+@keyframes row-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-row-reveal {
+  animation: row-reveal 340ms var(--ease-standard) both;
+}
+
+/* Implementation-scaffold placeholder styles (temporary, pre-Phase-2 routes) */
+.page-placeholder {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+.placeholder-card {
+  width: min(760px, 100%);
+  border: 1px solid var(--color-border-default);
+  background: var(--color-surface-1);
+  border-radius: var(--radius-card);
+  padding: 32px;
+}
+.placeholder-card h1 {
+  margin: 0 0 8px;
+  font-size: 32px;
+}
+.placeholder-card p {
+  color: var(--color-text-secondary);
+  line-height: 1.6;
+}
+.placeholder-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 24px;
+}
+.placeholder-links a {
+  padding: 11px 15px;
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-btn);
+}

@@ -1,0 +1,22 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: scopeforge
+      POSTGRES_PASSWORD: scopeforge
+      POSTGRES_DB: scopeforge
+    ports:
+      # Mapped to host port 5435 instead of the default 5432 to avoid a
+      # collision with a native PostgreSQL install, which commonly already
+      # listens on 5432. If you change this, update DATABASE_URL to match.
+      - "5435:5432"
+    volumes:
+      - scopeforge_postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U scopeforge"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  scopeforge_postgres:

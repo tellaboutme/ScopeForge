@@ -1,0 +1,49 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "scopeforge-api"
+version = "0.1.0"
+description = "ScopeForge analysis API"
+# Recommended dev/deploy target is 3.11+, but nothing in app/ or migrations/
+# uses 3.11-only syntax (verified repeatedly across Phase 1-7 validation
+# passes), and pip's own requires-python guard was blocking `pip install
+# -e ".[dev]"` on any 3.10 interpreter — including the sandbox used to build
+# and validate this project. Pinning to what the code actually needs keeps
+# `dev.bat`/`scripts/dev.mjs` self-install working everywhere it's actually
+# run. Bump this back up if 3.11-only syntax is deliberately introduced.
+requires-python = ">=3.10"
+dependencies = [
+  "fastapi>=0.115",
+  "uvicorn[standard]>=0.30",
+  "pydantic>=2.8",
+  "pydantic-settings>=2.4",
+  "openai>=1.40",
+  "sqlalchemy>=2.0",
+  "alembic>=1.13",
+  "psycopg[binary]>=3.1",
+  "argon2-cffi>=23.1",
+  # D042: used directly by captcha.py to call Cloudflare's Turnstile
+  # siteverify endpoint. Was already present transitively (the openai SDK
+  # is built on httpx) and as a test-only dep below, but a module that
+  # imports it directly at runtime should declare it explicitly rather than
+  # relying on another package's transitive dependency.
+  "httpx>=0.27"
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "ruff>=0.6"]
+
+# Alembic's migrations/ directory sits alongside app/ at the top level (a
+# flat layout), so setuptools' automatic package discovery sees two
+# top-level packages and refuses to guess which one is the installable
+# package (this broke `pip install -e ".[dev]"` once migrations/ was added
+# in Phase 7 milestone C). Only app/ is the actual importable package;
+# migrations/ is Alembic tooling, not meant to be installed.
+[tool.setuptools.packages.find]
+include = ["app*"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]

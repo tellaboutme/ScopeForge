@@ -1,0 +1,28 @@
+# Dependabot version updates are disabled (open-pull-requests-limit: 0 on
+# every ecosystem) — they were opening a steady stream of PRs, several of
+# them breaking major-version jumps (next 16, typescript 7, eslint 10, zod 4,
+# recharts 3, lucide 1), which is noise for a solo portfolio project.
+#
+# This only turns off *version* update PRs. Dependabot *security* updates
+# (real vulnerability fixes) are controlled separately in the repo's
+# Security settings and are NOT affected by this file. To re-enable routine
+# version bumps for an ecosystem, raise its open-pull-requests-limit.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /apps/web
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 0
+
+  - package-ecosystem: pip
+    directory: /apps/api
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 0
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 0
