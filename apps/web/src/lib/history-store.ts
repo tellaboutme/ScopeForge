@@ -1,6 +1,5 @@
 import type { ProjectAnalysis } from "@/types/analysis";
 import type { AnalysisSummary } from "@/types/history";
-import { HISTORY_FIXTURES } from "@/lib/history-fixtures";
 import { generateAnalysisId } from "@/lib/concepts";
 import { readLocalStorage, writeLocalStorage } from "@/lib/local-store";
 
@@ -39,13 +38,26 @@ export function summarizeAnalysis(analysis: ProjectAnalysis): AnalysisSummary {
  * swapping the body of these functions for real fetch calls in Phase 7
  * should not require changing any call site in `/history`.
  *
- * Falls back to demo fixtures only when no value has ever been written —
- * once the user clears history, an explicit empty array is persisted and
- * stays empty on reload (see readLocalStorage: only a missing key falls back).
+ * D060: used to fall back to `HISTORY_FIXTURES` (8 canned demo rows, dated
+ * up to a month old) whenever this browser had never written anything to
+ * `HISTORY_KEY` — which in practice meant every first-time visitor, and
+ * every fresh browser/profile, saw 8 fake "previous analyses" with no label
+ * distinguishing them from real ones. That was fine while this store was a
+ * placeholder ahead of a real backend (the comment above), but a real
+ * `POST /v1/analyses`/database has existed since Phase 7 — the fixtures were
+ * never actually removed once that landed. Found when a user pointed a fresh
+ * Postgres database at production and still saw a month-old "history": the
+ * DB was never involved, this fallback was the entire explanation. Now
+ * falls back to a real empty array, matching the exact state already
+ * produced by "Clear history" — /history's existing empty state (see
+ * `filtered.length === 0` below) handles this correctly with no further
+ * changes needed. `HISTORY_FIXTURES` itself is untouched and still used
+ * directly by `/design-system`'s swatch page, which is allowed to show
+ * clearly-labeled sample data.
  */
 export const historyStore = {
   list(): AnalysisSummary[] {
-    return readLocalStorage<AnalysisSummary[]>(HISTORY_KEY, HISTORY_FIXTURES);
+    return readLocalStorage<AnalysisSummary[]>(HISTORY_KEY, []);
   },
 
   /** Prepends a new summary (or replaces one with the same id). Used after
